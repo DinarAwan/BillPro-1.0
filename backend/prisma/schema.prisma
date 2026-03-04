@@ -1,0 +1,283 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+///////////////////////
+// ENUMS
+///////////////////////
+
+enum Role {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  EWALLET
+}
+
+enum UsageActionType {
+  INVOICE_CREATED
+  API_CALL
+}
+
+///////////////////////
+// USER
+///////////////////////
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  fullName   String
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  organizations Organization[]       @relation("OrganizationOwner")
+  memberships   OrganizationMember[]
+  invoices      Invoice[]            @relation("CreatedInvoices")
+  invoiceLogs   InvoiceLog[]
+}
+
+///////////////////////
+// ORGANIZATION
+///////////////////////
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  logoUrl   String?
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner          User                 @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  members        OrganizationMember[]
+  subscription   Subscription?
+  clients        Client[]
+  invoices       Invoice[]
+  apiKeys        ApiKey[]
+  usageLogs      UsageLog[]
+  invoiceCounter InvoiceCounter[]
+
+  @@index([ownerId])
+}
+
+///////////////////////
+// ORGANIZATION MEMBER
+///////////////////////
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  role           Role
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+///////////////////////
+// SUBSCRIPTION
+///////////////////////
+
+model Subscription {
+  id             String             @id @default(uuid())
+  organizationId String             @unique
+  plan           SubscriptionPlan
+  invoiceLimit   Int
+  userLimit      Int
+  startsAt       DateTime
+  expiresAt      DateTime
+  status         SubscriptionStatus
+  createdAt      DateTime           @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+///////////////////////
+// CLIENT
+///////////////////////
+
+model Client {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices     Invoice[]
+
+  @@index([organizationId])
+}
+
+///////////////////////
+// INVOICE
+///////////////////////
+
+model Invoice {
+  id             String        @id @default(uuid())
+  organizationId String
+  clientId       String
+  invoiceNumber  String
+  status         InvoiceStatus @default(DRAFT)
+  issueDate      DateTime
+  dueDate        DateTime
+  subtotal       Float
+  tax            Float
+  total          Float
+  notes          String?
+  createdById    String
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client        @relation(fields: [clientId], references: [id])
+  items        InvoiceItem[]
+  payments     Payment[]
+  logs         InvoiceLog[]
+  createdBy    User          @relation("CreatedInvoices", fields: [createdById], references: [id])
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+}
+
+///////////////////////
+// INVOICE ITEM
+///////////////////////
+
+model InvoiceItem {
+  id          String @id @default(uuid())
+  invoiceId   String
+  description String
+  quantity    Int
+  unitPrice   Float
+  total       Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+///////////////////////
+// PAYMENT
+///////////////////////
+
+model Payment {
+  id              String        @id @default(uuid())
+  invoiceId       String
+  amount          Float
+  paymentDate     DateTime
+  method          PaymentMethod
+  referenceNumber String?
+  createdAt       DateTime      @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+///////////////////////
+// INVOICE LOG
+///////////////////////
+
+model InvoiceLog {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  action      String
+  description String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([invoiceId])
+}
+
+///////////////////////
+// API KEY
+///////////////////////
+
+model ApiKey {
+  id             String    @id @default(uuid())
+  organizationId String
+  keyHash        String
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+///////////////////////
+// USAGE LOG
+///////////////////////
+
+model UsageLog {
+  id             String          @id @default(uuid())
+  organizationId String
+  actionType     UsageActionType
+  createdAt      DateTime        @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdAt])
+}
+
+///////////////////////
+// INVOICE COUNTER
+///////////////////////
+
+model InvoiceCounter {
+  organizationId String
+  year           Int
+  currentNumber  Int
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, year])
+}
