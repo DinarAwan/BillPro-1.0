@@ -1,7 +1,7 @@
 const SUBSCRIPTION_LIMITS = {
     FREE: {
         invoiceLimit: 20,
-        userLimit: 1,
+        userLimit: 3,
     },
     PRO: {
         invoiceLimit: -1, // unlimited

@@ -1,5 +1,6 @@
 const invoiceService = require('./invoice.service');
 const { sendSuccess, sendPaginated } = require('../../shared/utils/response');
+const { validationResult } = require('express-validator');
 
 class InvoiceController {
     async getAll(req, res, next) {
@@ -33,6 +34,10 @@ class InvoiceController {
 
     async create(req, res, next) {
         try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return res.status(400).json({ status: 'error', errors: errors.array() });
+            }
             const invoice = await invoiceService.createInvoice(
                 req.params.orgId,
                 req.body,

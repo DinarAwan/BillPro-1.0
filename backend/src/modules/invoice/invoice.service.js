@@ -15,20 +15,28 @@ class InvoiceService {
     }
 
     async createInvoice(orgId, data, userId) {
-        const { items, ...invoiceData } = data;
+        const { items, clientId, issueDate, dueDate, tax, notes } = data;
 
         if (!items || items.length === 0) {
             throw new AppError('Invoice must have at least one item.', 400);
         }
 
-        return invoiceRepository.createWithItems(
-            {
-                ...invoiceData,
-                organizationId: orgId,
-            },
-            items,
-            userId
-        );
+        const invoiceData = {
+            clientId,
+            issueDate: new Date(issueDate),
+            dueDate: new Date(dueDate),
+            tax: Number(tax) || 0,
+            organizationId: orgId,
+        };
+        if (notes) invoiceData.notes = notes;
+
+        const parsedItems = items.map((item) => ({
+            description: item.description,
+            quantity: parseInt(item.quantity),
+            unitPrice: parseFloat(item.unitPrice),
+        }));
+
+        return invoiceRepository.createWithItems(invoiceData, parsedItems, userId);
     }
 
     async updateInvoice(id, orgId, data, userId) {
